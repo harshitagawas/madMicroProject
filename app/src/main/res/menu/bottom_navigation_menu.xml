@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/navigation_home"
+
+        android:title="Home" />
+
+    <item
+        android:id="@+id/navigation_library"
+
+        android:title="Library" />
+
+    <item
+        android:id="@+id/navigation_review"
+
+        android:title="Book Reviews" />
+
+    <item
+        android:id="@+id/navigation_tbr"
+
+        android:title="TBR List" />
+
+    <item
+        android:id="@+id/navigation_goals"
+
+        android:title="Daily Goals" />
+
+
+
+</menu>

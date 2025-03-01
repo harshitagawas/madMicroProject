@@ -1,5 +1,6 @@
 package com.example.microproject.fragments;
 
+
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -22,6 +23,7 @@ public class TbrFragment extends Fragment {
     private BookAdapter bookAdapter;
     private EditText editTextBook;
 
+
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -32,12 +34,13 @@ public class TbrFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+
         editTextBook = view.findViewById(R.id.editTextBook);
         Button buttonAddBook = view.findViewById(R.id.buttonAddBook);
         RecyclerView recyclerViewBooks = view.findViewById(R.id.recyclerViewBooks);
 
         recyclerViewBooks.setLayoutManager(new LinearLayoutManager(requireContext()));
-        bookAdapter = new BookAdapter(requireContext(), bookList); 
+        bookAdapter = new BookAdapter(requireContext(), bookList);
 
         recyclerViewBooks.setAdapter(bookAdapter);
 

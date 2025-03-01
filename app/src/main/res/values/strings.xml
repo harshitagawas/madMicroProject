@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">microproject</string>
+    <string name="your_categories">Your Categories:</string>
+    <string name="add_new_category">Add new Category</string>
+    <string name="enter_category_name">Enter Category name:</string>
+    <string name="enter_new_category">Enter new Category:</string>
 </resources>

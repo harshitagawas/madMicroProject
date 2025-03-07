@@ -39,7 +39,7 @@ public class LibraryFragment extends Fragment {
         categoryRecyclerView = view.findViewById(R.id.categoryRecyclerView);
         categoryRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
 
-        adapter = new CategoryAdapter(categories);
+        adapter = new CategoryAdapter(categories,getParentFragmentManager());
         categoryRecyclerView.setAdapter(adapter);
 
         // Initialize "Add New" Button

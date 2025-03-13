@@ -44,7 +44,10 @@ dependencies {
     implementation(libs.constraintlayout)
     implementation(libs.gson)
     testImplementation(libs.junit)
+    implementation(libs.lottie)
+
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
+
 
 }

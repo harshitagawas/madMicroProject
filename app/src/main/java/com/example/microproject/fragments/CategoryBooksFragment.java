@@ -36,6 +36,7 @@ public class CategoryBooksFragment extends Fragment {
     private CategoryBooksAdapter adapter;
     private RecyclerView recycler;
     private Uri selectedImageUri;
+    private ImageView imagePreview; // Declare globally
 
     @Nullable
     @Override
@@ -52,7 +53,7 @@ public class CategoryBooksFragment extends Fragment {
         recycler = view.findViewById(R.id.addBookRecycler);
         recycler.setLayoutManager(new GridLayoutManager(getContext(), 2));
 
-        adapter = new CategoryBooksAdapter(getContext(),categoryBooks);
+        adapter = new CategoryBooksAdapter(getContext(), categoryBooks);
         recycler.setAdapter(adapter);
 
         Button btn = view.findViewById(R.id.add_book);
@@ -63,6 +64,9 @@ public class CategoryBooksFragment extends Fragment {
                 result -> {
                     if (result.getResultCode() == RESULT_OK && result.getData() != null) {
                         selectedImageUri = result.getData().getData();
+                        if (imagePreview != null) {
+                            imagePreview.setImageURI(selectedImageUri); // Update preview inside dialog
+                        }
                     }
                 });
     }
@@ -74,9 +78,9 @@ public class CategoryBooksFragment extends Fragment {
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_add_category_books, null);
         EditText bookNameInput = dialogView.findViewById(R.id.book_name_input);
         Button selectImageButton = dialogView.findViewById(R.id.select_image_button);
-        ImageView imagePreview = dialogView.findViewById(R.id.image_preview);
+        imagePreview = dialogView.findViewById(R.id.image_preview); // Assign globally
 
-        selectImageButton.setOnClickListener(v -> pickImage(imagePreview));
+        selectImageButton.setOnClickListener(v -> pickImage());
 
         builder.setView(dialogView);
         builder.setPositiveButton("Add", (dialog, which) -> {
@@ -93,7 +97,7 @@ public class CategoryBooksFragment extends Fragment {
         builder.show();
     }
 
-    private void pickImage(ImageView imagePreview) {
+    private void pickImage() {
         Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
         imagePickerLauncher.launch(intent);
     }

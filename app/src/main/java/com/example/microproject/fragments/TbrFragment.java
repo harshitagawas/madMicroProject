@@ -52,5 +52,6 @@ public class TbrFragment extends Fragment {
                 editTextBook.setText(""); // Clear input field
             }
         });
+        
     }
 }

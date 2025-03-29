@@ -8,7 +8,8 @@ material = "1.12.0"
 activity = "1.10.0"
 constraintlayout = "2.2.0"
 lottie = "6.6.3"
-
+room = "2.6.1"
+lifecycle = "2.6.2"
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -20,7 +21,9 @@ activity = { group = "androidx.activity", name = "activity", version.ref = "acti
 constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
 gson = {group ="com.google.code.gson", name="gson", version = "2.10.1"}
 lottie = { module = "com.airbnb.android:lottie", version.ref = "lottie" }
-
+room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+lifecycle-livedata = { module = "androidx.lifecycle:lifecycle-livedata-ktx", version.ref = "lifecycle" }
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 

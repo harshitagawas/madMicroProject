@@ -1,5 +1,5 @@
 package com.example.microproject.adapters;
-//tbr adapter
+
 import android.content.Context;
 import android.graphics.Paint;
 import android.view.LayoutInflater;
@@ -11,15 +11,21 @@ import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 import com.example.microproject.R;
+import com.example.microproject.database.BookDao;
 import com.example.microproject.models.Book;
-import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class BookAdapter extends RecyclerView.Adapter<BookAdapter.BookViewHolder> {
     private Context context;
-    private ArrayList<Book> bookList;
+    private List<Book> bookList;
+    private BookDao bookDao;
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+
     private final int[] imgResources = {
             R.drawable.blue_book,
             R.drawable.yellow_book,
@@ -29,9 +35,15 @@ public class BookAdapter extends RecyclerView.Adapter<BookAdapter.BookViewHolder
 
     private final int[] paddings = {8, 10, 6};
 
-    public BookAdapter(Context context, ArrayList<Book> bookList) {
+    public BookAdapter(Context context, List<Book> bookList, BookDao bookDao) {
         this.context = context;
         this.bookList = bookList;
+        this.bookDao = bookDao;
+    }
+
+    public void updateList(List<Book> newList) {
+        this.bookList = newList;
+        notifyDataSetChanged();
     }
 
     @NonNull
@@ -42,21 +54,13 @@ public class BookAdapter extends RecyclerView.Adapter<BookAdapter.BookViewHolder
     }
 
     @Override
+
     public void onBindViewHolder(@NonNull BookViewHolder holder, int position) {
         Book book = bookList.get(position);
         holder.textViewBook.setText(book.getName());
         holder.checkBoxRead.setChecked(book.isRead());
 
-        // Apply random background and padding
-        Random random = new Random();
-        int rand1 = random.nextInt(imgResources.length);
-        int rand2 = random.nextInt(paddings.length);
-        int paddingInPixels = (int) (paddings[rand2] * context.getResources().getDisplayMetrics().density);
-
-        holder.main.setPadding(paddingInPixels, 0, paddingInPixels, 0);
-        holder.bg.setBackground(ContextCompat.getDrawable(context, imgResources[rand1]));
-
-        // Apply strikethrough if the book is already marked as read
+        // Apply strikethrough if the book is marked as read
         if (book.isRead()) {
             holder.textViewBook.setPaintFlags(holder.textViewBook.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
         } else {
@@ -67,6 +71,9 @@ public class BookAdapter extends RecyclerView.Adapter<BookAdapter.BookViewHolder
         holder.checkBoxRead.setOnCheckedChangeListener((buttonView, isChecked) -> {
             book.setRead(isChecked);
 
+            // Update database when checkbox is toggled
+            executorService.execute(() -> bookDao.updateBook(book));
+
             // Toggle strikethrough based on checkbox state
             if (isChecked) {
                 holder.textViewBook.setPaintFlags(holder.textViewBook.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
@@ -75,6 +82,7 @@ public class BookAdapter extends RecyclerView.Adapter<BookAdapter.BookViewHolder
             }
         });
     }
+
 
     @Override
     public int getItemCount() {

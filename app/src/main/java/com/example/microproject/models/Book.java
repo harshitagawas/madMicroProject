@@ -1,25 +1,40 @@
-    package com.example.microproject.models;
+package com.example.microproject.models;
 
-    public class Book {
-        private String name;
-        private boolean isRead;
+import androidx.room.Entity;
+import androidx.room.PrimaryKey;
 
-        // Constructor
-        public Book(String name) {
-            this.name = name;
-            this.isRead = false; // Default: book is unread
-        }
+@Entity(tableName = "books")
+public class Book {
+    @PrimaryKey(autoGenerate = true)
+    private int id;
 
-        // Getters
-        public String getName() { return name; }
-        public boolean isRead() { return isRead; }
+    private String name;
+    private boolean isRead;
 
-        // Setters
-        public void setName(String name) { this.name = name; }
-        public void setRead(boolean read) { isRead = read; }
-
-        @Override
-        public String toString() {
-            return "Book{name='" + name + "', isRead=" + isRead + "}";
-        }
+    // Constructor
+    public Book(String name, boolean isRead) {
+        this.name = name;
+        this.isRead = isRead;
     }
+
+   // Alternative constructor for backward compatibility
+//    public Book(String name) {
+//        this.name = name;
+//        this.isRead = false;
+//    }
+
+    // Getters
+    public int getId() { return id; }
+    public String getName() { return name; }
+    public boolean isRead() { return isRead; }
+
+    // Setters
+    public void setId(int id) { this.id = id; }
+    public void setName(String name) { this.name = name; }
+    public void setRead(boolean read) { isRead = read; }
+
+    @Override
+    public String toString() {
+        return "Book{id=" + id + ", name='" + name + "', isRead=" + isRead + "}";
+    }
+}

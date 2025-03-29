@@ -43,11 +43,17 @@ dependencies {
     implementation(libs.activity)
     implementation(libs.constraintlayout)
     implementation(libs.gson)
-    testImplementation(libs.junit)
     implementation(libs.lottie)
 
+    // Room Database
+    implementation(libs.room.runtime)
+    annotationProcessor(libs.room.compiler)
+
+    // Lifecycle components (Optional, if using LiveData)
+    implementation(libs.lifecycle.livedata)
+
+    testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
-
 
 }

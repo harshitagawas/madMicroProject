@@ -7,6 +7,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
@@ -14,14 +15,28 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.example.microproject.R;
 import com.example.microproject.adapters.CategoryAdapter;
+import com.example.microproject.database.AppDatabase;
+import com.example.microproject.models.Category;
+
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class LibraryFragment extends Fragment {
 
-    private List<String> categories = new ArrayList<>();
-    private CategoryAdapter adapter;
+    private List<Category> categories = new ArrayList<>();
+    private CategoryAdapter categoryAdapter;
     private RecyclerView categoryRecyclerView;
+    private AppDatabase database;
+    private ExecutorService executorService;
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        database = AppDatabase.getInstance(requireContext());
+        executorService = Executors.newSingleThreadExecutor();
+    }
 
     @Nullable
     @Override
@@ -35,34 +50,88 @@ public class LibraryFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // Initialize RecyclerView
+        // Update title if needed
+        TextView categoriesTitle = view.findViewById(R.id.categoriesTitle);
+        if (categoriesTitle != null) {
+            categoriesTitle.setText("Your Categories");
+        }
+
+        // Initialize Category RecyclerView
         categoryRecyclerView = view.findViewById(R.id.categoryRecyclerView);
         categoryRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
 
-        adapter = new CategoryAdapter(categories, getParentFragmentManager());
-        categoryRecyclerView.setAdapter(adapter);
+        categoryAdapter = new CategoryAdapter(categories, getParentFragmentManager());
+        categoryRecyclerView.setAdapter(categoryAdapter);
 
-        // Initialize "Add New" Button
+        // Initialize "Add Category" Button
         View addNewCategory = view.findViewById(R.id.add_new);
-        addNewCategory.setOnClickListener(v -> showAddCategoryDialog());
+        if (addNewCategory != null) {
+            addNewCategory.setOnClickListener(v -> showAddCategoryDialog());
+        }
+
+        // Load categories from database
+        loadCategories();
+    }
+    
+    private void loadCategories() {
+        executorService.execute(() -> {
+            List<Category> categoryList = database.categoryDao().getAllCategories();
+            requireActivity().runOnUiThread(() -> {
+                categories.clear();
+                categories.addAll(categoryList);
+                categoryAdapter.notifyDataSetChanged();
+            });
+        });
     }
 
     private void showAddCategoryDialog() {
         Dialog dialog = new Dialog(requireContext());
         dialog.setContentView(R.layout.dialog_layout);
-
-        EditText categoryInput = dialog.findViewById(R.id.categoryInput);
-        Button addCategoryButton = dialog.findViewById(R.id.addCategoryButton);
-
-        addCategoryButton.setOnClickListener(v -> {
-            String categoryName = categoryInput.getText().toString().trim();
-            if (!categoryName.isEmpty()) {
-                categories.add(categoryName); // Add category to list
-                adapter.notifyDataSetChanged(); // Refresh RecyclerView
-                dialog.dismiss(); // Close dialog
+        
+        // Update dialog title for category
+        dialog.setTitle("Add Category");
+        
+        // Get views
+        EditText nameInput = dialog.findViewById(R.id.categoryInput);
+        EditText descriptionInput = dialog.findViewById(R.id.descriptionInput);
+        Button addButton = dialog.findViewById(R.id.addCategoryButton);
+        
+        // Hide description field if needed
+        if (descriptionInput != null) {
+            descriptionInput.setVisibility(View.GONE);
+        }
+        
+        // Change hints and button text
+        nameInput.setHint("Category Name");
+        addButton.setText("Add Category");
+        
+        addButton.setOnClickListener(v -> {
+            String name = nameInput.getText().toString().trim();
+            
+            if (!name.isEmpty()) {
+                // Create and save the new category
+                Category category = new Category(name);
+                saveCategory(category);
+                dialog.dismiss();
             }
         });
-
+        
         dialog.show();
+    }
+    
+    private void saveCategory(Category category) {
+        executorService.execute(() -> {
+            long id = database.categoryDao().insertCategory(category);
+            category.setId((int) id);  // Update the category with the new ID
+            loadCategories(); // Reload the list after adding
+        });
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        if (executorService != null) {
+            executorService.shutdown();
+        }
     }
 }

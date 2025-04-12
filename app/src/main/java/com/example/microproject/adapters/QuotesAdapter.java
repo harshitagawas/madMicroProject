@@ -12,7 +12,10 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.microproject.R;
 import com.example.microproject.models.Quote;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
+import java.util.Locale;
 
 public class QuotesAdapter extends RecyclerView.Adapter<QuotesAdapter.QuoteViewHolder> {
     private ArrayList<Quote> quoteList;
@@ -34,6 +37,11 @@ public class QuotesAdapter extends RecyclerView.Adapter<QuotesAdapter.QuoteViewH
     public void onBindViewHolder(@NonNull QuotesAdapter.QuoteViewHolder holder, int position) {
         Quote quote = quoteList.get(position);
         holder.quoteText.setText(quote.getQuote());
+        
+        // Format and display the timestamp
+        SimpleDateFormat sdf = new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault());
+        String formattedDate = sdf.format(new Date(quote.getTimestamp()));
+        holder.quoteDate.setText(formattedDate);
     }
 
     @Override
@@ -43,10 +51,12 @@ public class QuotesAdapter extends RecyclerView.Adapter<QuotesAdapter.QuoteViewH
 
     static class QuoteViewHolder extends RecyclerView.ViewHolder {
         TextView quoteText;
+        TextView quoteDate;
 
         public QuoteViewHolder(@NonNull View itemView) {
             super(itemView);
             quoteText = itemView.findViewById(R.id.quoteText);
+            quoteDate = itemView.findViewById(R.id.quoteDate);
         }
     }
 }

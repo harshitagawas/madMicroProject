@@ -11,15 +11,16 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.microproject.R;
 import com.example.microproject.fragments.CategoryBooksFragment;
+import com.example.microproject.models.Category;
 
 import java.util.List;
 
 public class CategoryAdapter extends RecyclerView.Adapter<CategoryAdapter.CategoryViewHolder> {
 
-    private final List<String> categories;
+    private final List<Category> categories;
     private final FragmentManager fragmentManager;
 
-    public CategoryAdapter(List<String> categories, FragmentManager fragmentManager) {
+    public CategoryAdapter(List<Category> categories, FragmentManager fragmentManager) {
         this.categories = categories;
         this.fragmentManager = fragmentManager;
     }
@@ -34,12 +35,14 @@ public class CategoryAdapter extends RecyclerView.Adapter<CategoryAdapter.Catego
 
     @Override
     public void onBindViewHolder(@NonNull CategoryViewHolder holder, int position) {
-        holder.categoryName.setText(categories.get(position));
+        Category category = categories.get(position);
+        holder.categoryName.setText(category.getName());
 
         // Set click listener on the shelf
         holder.shelf.setOnClickListener(v -> {
             fragmentManager.beginTransaction()
-                    .replace(R.id.fragment_container, new CategoryBooksFragment()) // R.id.fragment_container is the container where fragments are swapped
+                    .replace(R.id.fragment_container, 
+                             CategoryBooksFragment.newInstance(category.getId()))
                     .addToBackStack(null) // Allows back navigation
                     .commit();
         });

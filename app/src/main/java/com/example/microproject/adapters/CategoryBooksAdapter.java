@@ -37,8 +37,9 @@ public class CategoryBooksAdapter extends RecyclerView.Adapter<CategoryBooksAdap
         CategoryBook book = categoryBooks.get(position);
         holder.bookTitle.setText(book.getName());
 
-        if (book.getImageUri() != null) {
-            holder.bookImage.setImageURI(book.getImageUri());
+        Uri imageUri = book.getImageUri();
+        if (imageUri != null) {
+            holder.bookImage.setImageURI(imageUri);
         }
     }
 

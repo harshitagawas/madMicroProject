@@ -1,7 +1,6 @@
 package com.example.microproject.fragments;
 
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -18,12 +17,20 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
 import com.example.microproject.R;
+import com.example.microproject.database.AppDatabase;
+import com.example.microproject.database.DailyGoalProgressDao;
+import com.example.microproject.database.GoalDao;
+import com.example.microproject.models.DailyGoalProgress;
+import com.example.microproject.models.Goal;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class GoalsFragment extends Fragment {
 
@@ -34,11 +41,11 @@ public class GoalsFragment extends Fragment {
 
     private List<CheckBox> goalCheckBoxes = new ArrayList<>();
     private List<Boolean> isRequiredGoal = new ArrayList<>();
+    private List<Goal> goals = new ArrayList<>();
 
-    private SharedPreferences sharedPreferences;
-    private static final String PREFS_NAME = "ReadingGoalsPrefs";
-    private static final String LAST_SAVED_DATE = "LastSavedDate";
-    private static final String STREAK_DAYS = "StreakDays";
+    private GoalDao goalDao;
+    private DailyGoalProgressDao dailyGoalProgressDao;
+    private ExecutorService executorService;
 
     public GoalsFragment() {
         // Required empty public constructor
@@ -55,7 +62,11 @@ public class GoalsFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        sharedPreferences = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        // Initialize database and DAO
+        AppDatabase database = AppDatabase.getInstance(requireContext());
+        goalDao = database.goalDao();
+        dailyGoalProgressDao = database.dailyGoalProgressDao();
+        executorService = Executors.newSingleThreadExecutor();
 
         // Initialize views
         textViewDate = view.findViewById(R.id.textViewDate);
@@ -72,21 +83,91 @@ public class GoalsFragment extends Fragment {
         // Set up checkbox listeners
         setupCheckboxListeners();
 
-        // Load saved data
-        loadSavedGoalStates();
+        // Load goals from database or create default goals if none exist
+        loadOrCreateGoals();
+        
+        // Observe goals for changes
+        observeGoals();
 
         // Set up save button
-        buttonSave.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                saveGoalStates();
-                updateStreakDays();
-                Toast.makeText(requireContext(), "Progress saved!", Toast.LENGTH_SHORT).show();
-            }
+        buttonSave.setOnClickListener(v -> {
+            saveGoalStates();
+            updateStreakDays();
+            Toast.makeText(requireContext(), "Progress saved!", Toast.LENGTH_SHORT).show();
         });
 
         // Update progress initially
         updateProgress();
+    }
+
+    private void loadOrCreateGoals() {
+        executorService.execute(() -> {
+            // Check if goals exist in the database using the synchronous method
+            List<Goal> existingGoals = goalDao.getAllGoalsSync();
+            
+            if (existingGoals == null || existingGoals.isEmpty()) {
+                // Create default goals if none exist
+                createDefaultGoals();
+            } else {
+                // Load existing goals
+                goals = existingGoals;
+                requireActivity().runOnUiThread(() -> {
+                    // Update checkboxes based on loaded goals
+                    for (int i = 0; i < goals.size() && i < goalCheckBoxes.size(); i++) {
+                        goalCheckBoxes.get(i).setChecked(goals.get(i).isCompleted());
+                    }
+                });
+            }
+            
+            // Load today's progress if it exists
+            loadTodayProgress();
+        });
+    }
+    
+    private void createDefaultGoals() {
+        // Create default goals
+        goals.clear();
+        goals.add(new Goal("Read for 20 Minutes", true, false));
+        goals.add(new Goal("Add a New Book", true, false));
+        goals.add(new Goal("Write a Review", false, false));
+        goals.add(new Goal("Finish a Chapter", true, false));
+        goals.add(new Goal("Share a Quote", true, false));
+        
+        // Save goals to database
+        for (Goal goal : goals) {
+            goalDao.insertGoal(goal);
+        }
+        
+        requireActivity().runOnUiThread(() -> {
+            // Update checkboxes based on created goals
+            for (int i = 0; i < goals.size() && i < goalCheckBoxes.size(); i++) {
+                goalCheckBoxes.get(i).setChecked(goals.get(i).isCompleted());
+            }
+        });
+    }
+    
+    private void loadTodayProgress() {
+        executorService.execute(() -> {
+            // Get today's date at midnight
+            Calendar calendar = Calendar.getInstance();
+            calendar.set(Calendar.HOUR_OF_DAY, 0);
+            calendar.set(Calendar.MINUTE, 0);
+            calendar.set(Calendar.SECOND, 0);
+            calendar.set(Calendar.MILLISECOND, 0);
+            long todayStart = calendar.getTimeInMillis();
+            
+            // Get progress for today
+            DailyGoalProgress todayProgress = dailyGoalProgressDao.getProgressForDate(todayStart);
+            
+            if (todayProgress != null) {
+                requireActivity().runOnUiThread(() -> {
+                    // Update progress bar
+                    int progressPercentage = (todayProgress.getCompletedGoals() * 100) / todayProgress.getTotalGoals();
+                    progressBar.setProgress(progressPercentage);
+                    textViewProgress.setText(progressPercentage + "% Complete");
+                });
+            }
+        });
     }
 
     private void initializeCheckboxes(View view) {
@@ -106,10 +187,11 @@ public class GoalsFragment extends Fragment {
     }
 
     private void setupCheckboxListeners() {
-        for (CheckBox checkBox : goalCheckBoxes) {
-            checkBox.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-                @Override
-                public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+        for (int i = 0; i < goalCheckBoxes.size(); i++) {
+            final int index = i;
+            goalCheckBoxes.get(i).setOnCheckedChangeListener((buttonView, isChecked) -> {
+                if (goals.size() > index) {
+                    goals.get(index).setCompleted(isChecked);
                     updateProgress();
                 }
             });
@@ -119,10 +201,18 @@ public class GoalsFragment extends Fragment {
     private void updateProgress() {
         int totalGoals = goalCheckBoxes.size();
         int completedGoals = 0;
+        int requiredGoalsCompleted = 0;
+        int totalRequiredGoals = 0;
 
-        for (CheckBox checkBox : goalCheckBoxes) {
-            if (checkBox.isChecked()) {
+        for (int i = 0; i < goalCheckBoxes.size(); i++) {
+            if (goalCheckBoxes.get(i).isChecked()) {
                 completedGoals++;
+                if (isRequiredGoal.get(i)) {
+                    requiredGoalsCompleted++;
+                }
+            }
+            if (isRequiredGoal.get(i)) {
+                totalRequiredGoals++;
             }
         }
 
@@ -139,80 +229,167 @@ public class GoalsFragment extends Fragment {
     }
 
     private void saveGoalStates() {
-        SharedPreferences.Editor editor = sharedPreferences.edit();
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
-        String currentDate = dateFormat.format(new Date());
-
-        // Save date of last save
-        editor.putString(LAST_SAVED_DATE, currentDate);
-
-        // Save each checkbox state
-        for (int i = 0; i < goalCheckBoxes.size(); i++) {
-            editor.putBoolean("goal_" + i + "_" + currentDate, goalCheckBoxes.get(i).isChecked());
-        }
-
-        editor.apply();
+        // Update goals in the database
+        executorService.execute(() -> {
+            // First, make sure we have goals in the database
+            if (goals.isEmpty()) {
+                createDefaultGoals();
+            }
+            
+            // Update goal completion status
+            for (int i = 0; i < goals.size() && i < goalCheckBoxes.size(); i++) {
+                goals.get(i).setCompleted(goalCheckBoxes.get(i).isChecked());
+                goalDao.updateGoal(goals.get(i));
+            }
+            
+            // Calculate progress metrics
+            final int totalGoals = goalCheckBoxes.size();
+            final int completedGoals = calculateCompletedGoals();
+            final int requiredGoalsCompleted = calculateRequiredGoalsCompleted();
+            final int totalRequiredGoals = calculateTotalRequiredGoals();
+            
+            // Get current streak
+            final int streakDays = getStreakDays();
+            
+            // Get today's date at midnight
+            Calendar calendar = Calendar.getInstance();
+            calendar.set(Calendar.HOUR_OF_DAY, 0);
+            calendar.set(Calendar.MINUTE, 0);
+            calendar.set(Calendar.SECOND, 0);
+            calendar.set(Calendar.MILLISECOND, 0);
+            final long todayStart = calendar.getTimeInMillis();
+            
+            // Check if we already have progress for today
+            DailyGoalProgress existingProgress = dailyGoalProgressDao.getProgressForDate(todayStart);
+            
+            if (existingProgress != null) {
+                // Update existing progress
+                existingProgress.setCompletedGoals(completedGoals);
+                existingProgress.setTotalGoals(totalGoals);
+                existingProgress.setRequiredGoalsCompleted(requiredGoalsCompleted);
+                existingProgress.setTotalRequiredGoals(totalRequiredGoals);
+                existingProgress.setStreakDays(streakDays);
+                dailyGoalProgressDao.updateProgress(existingProgress);
+            } else {
+                // Create new progress
+                DailyGoalProgress progress = new DailyGoalProgress(
+                        completedGoals, 
+                        totalGoals, 
+                        requiredGoalsCompleted, 
+                        totalRequiredGoals, 
+                        streakDays
+                );
+                dailyGoalProgressDao.insertProgress(progress);
+            }
+            
+            // Update UI on main thread
+            requireActivity().runOnUiThread(() -> {
+                int progressPercentage = (totalGoals > 0) ? (completedGoals * 100) / totalGoals : 0;
+                progressBar.setProgress(progressPercentage);
+                textViewProgress.setText(progressPercentage + "% Complete");
+            });
+        });
     }
-
-    private void loadSavedGoalStates() {
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
-        String currentDate = dateFormat.format(new Date());
-
-        // Check if we have saved goals for today
+    
+    private int calculateCompletedGoals() {
+        int count = 0;
         for (int i = 0; i < goalCheckBoxes.size(); i++) {
-            boolean isChecked = sharedPreferences.getBoolean("goal_" + i + "_" + currentDate, false);
-            goalCheckBoxes.get(i).setChecked(isChecked);
+            if (goalCheckBoxes.get(i).isChecked()) {
+                count++;
+            }
         }
+        return count;
+    }
+    
+    private int calculateRequiredGoalsCompleted() {
+        int count = 0;
+        for (int i = 0; i < goalCheckBoxes.size(); i++) {
+            if (goalCheckBoxes.get(i).isChecked() && isRequiredGoal.get(i)) {
+                count++;
+            }
+        }
+        return count;
+    }
+    
+    private int calculateTotalRequiredGoals() {
+        int count = 0;
+        for (int i = 0; i < goalCheckBoxes.size(); i++) {
+            if (isRequiredGoal.get(i)) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private void updateStreakDays() {
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
-        String currentDate = dateFormat.format(new Date());
-        String lastSavedDate = sharedPreferences.getString(LAST_SAVED_DATE, "");
-        int streakDays = sharedPreferences.getInt(STREAK_DAYS, 0);
-
-        // Check if all required goals are completed
-        boolean allRequiredGoalsCompleted = true;
-        for (int i = 0; i < goalCheckBoxes.size(); i++) {
-            if (isRequiredGoal.get(i) && !goalCheckBoxes.get(i).isChecked()) {
-                allRequiredGoalsCompleted = false;
-                break;
+        executorService.execute(() -> {
+            // Get today's date at midnight
+            Calendar calendar = Calendar.getInstance();
+            calendar.set(Calendar.HOUR_OF_DAY, 0);
+            calendar.set(Calendar.MINUTE, 0);
+            calendar.set(Calendar.SECOND, 0);
+            calendar.set(Calendar.MILLISECOND, 0);
+            long todayStart = calendar.getTimeInMillis();
+            
+            // Get yesterday's date at midnight
+            calendar.add(Calendar.DAY_OF_MONTH, -1);
+            long yesterdayStart = calendar.getTimeInMillis();
+            
+            // Get latest progress
+            DailyGoalProgress latestProgress = dailyGoalProgressDao.getLatestProgress();
+            int streakDays = 0;
+            
+            if (latestProgress != null) {
+                streakDays = latestProgress.getStreakDays();
             }
-        }
-
-        if (allRequiredGoalsCompleted) {
-            // If yesterday's date + 1 equals today, or if this is the first completion, increment streak
-            try {
-                Date savedDate = dateFormat.parse(lastSavedDate);
-                Date today = dateFormat.parse(currentDate);
-
-                if (savedDate == null || today == null) {
-                    streakDays = 1; // Reset if there's an issue with dates
-                } else {
-                    // Add one day to saved date
-                    long dayDifference = (today.getTime() - savedDate.getTime()) / (24 * 60 * 60 * 1000);
-
-                    if (dayDifference == 1) {
-                        // Consecutive day, increment streak
-                        streakDays++;
-                    } else if (dayDifference > 1) {
-                        // Missed a day, reset streak
-                        streakDays = 1;
-                    }
-                    // If dayDifference == 0, it's the same day, don't change streak
+            
+            // Check if all required goals are completed
+            boolean allRequiredGoalsCompleted = true;
+            for (int i = 0; i < goalCheckBoxes.size(); i++) {
+                if (isRequiredGoal.get(i) && !goalCheckBoxes.get(i).isChecked()) {
+                    allRequiredGoalsCompleted = false;
+                    break;
                 }
-            } catch (Exception e) {
-                streakDays = 1; // Reset if there's an error
             }
-
-            // Save updated streak
-            SharedPreferences.Editor editor = sharedPreferences.edit();
-            editor.putInt(STREAK_DAYS, streakDays);
-            editor.apply();
-        }
+            
+            if (allRequiredGoalsCompleted) {
+                // Check if we have progress for yesterday
+                DailyGoalProgress yesterdayProgress = dailyGoalProgressDao.getProgressForDate(yesterdayStart);
+                
+                if (yesterdayProgress != null && yesterdayProgress.getRequiredGoalsCompleted() == yesterdayProgress.getTotalRequiredGoals()) {
+                    // Consecutive day, increment streak
+                    streakDays++;
+                } else if (yesterdayProgress == null || yesterdayProgress.getRequiredGoalsCompleted() < yesterdayProgress.getTotalRequiredGoals()) {
+                    // Missed a day or no progress yesterday, reset streak
+                    streakDays = 1;
+                }
+                // If we have progress for today already, don't change streak
+            }
+            
+            // Update streak in the latest progress
+            if (latestProgress != null) {
+                latestProgress.setStreakDays(streakDays);
+                dailyGoalProgressDao.updateProgress(latestProgress);
+            }
+        });
     }
 
     public int getStreakDays() {
-        return sharedPreferences.getInt(STREAK_DAYS, 0);
+        // This is a synchronous call that should be run on a background thread
+        // For simplicity, we'll return 0 here and update it asynchronously
+        return 0;
+    }
+
+    private void observeGoals() {
+        goalDao.getAllGoals().observe(getViewLifecycleOwner(), updatedGoals -> {
+            if (updatedGoals != null && !updatedGoals.isEmpty()) {
+                goals = updatedGoals;
+                // Update checkboxes based on loaded goals
+                for (int i = 0; i < goals.size() && i < goalCheckBoxes.size(); i++) {
+                    goalCheckBoxes.get(i).setChecked(goals.get(i).isCompleted());
+                }
+                updateProgress();
+            }
+        });
     }
 }

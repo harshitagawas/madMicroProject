@@ -6,6 +6,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -15,16 +16,31 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.microproject.R;
 import com.example.microproject.adapters.QuotesAdapter;
+import com.example.microproject.database.AppDatabase;
+import com.example.microproject.database.QuoteDao;
 import com.example.microproject.models.Quote;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class QuotesFragment extends Fragment {
     private List<Quote> quoteList = new ArrayList<>();
     private QuotesAdapter adapter;
     private RecyclerView quotesRecyclerView;
     private EditText quoteInput;
+    private QuoteDao quoteDao;
+    private ExecutorService executorService;
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        // Initialize database and DAO
+        AppDatabase database = AppDatabase.getInstance(requireContext());
+        quoteDao = database.quoteDao();
+        executorService = Executors.newSingleThreadExecutor();
+    }
 
     @Nullable
     @Override
@@ -48,16 +64,43 @@ public class QuotesFragment extends Fragment {
 
         quoteInput = view.findViewById(R.id.quoteInput);
 
+        // Load quotes from database
+        loadQuotes();
+
         // Initialize "Add New" Button
         Button addQuoteBtn = view.findViewById(R.id.addQuoteBtn);
         addQuoteBtn.setOnClickListener(v -> {
-            String q = quoteInput.getText().toString().trim();
-            if (!q.isEmpty()) {
-                quoteList.add(new Quote(q));
-                adapter.notifyItemInserted(quoteList.size() - 1); // Efficient update
-                quotesRecyclerView.scrollToPosition(quoteList.size() - 1); // Scroll to new quote
+            String quoteText = quoteInput.getText().toString().trim();
+            if (!quoteText.isEmpty()) {
+                addQuote(quoteText);
                 quoteInput.setText(""); // Clear input field
+            } else {
+                Toast.makeText(getContext(), "Please enter a quote", Toast.LENGTH_SHORT).show();
             }
+        });
+    }
+
+    private void loadQuotes() {
+        executorService.execute(() -> {
+            List<Quote> quotes = quoteDao.getAllQuotes();
+            requireActivity().runOnUiThread(() -> {
+                quoteList.clear();
+                quoteList.addAll(quotes);
+                adapter.notifyDataSetChanged();
+            });
+        });
+    }
+
+    private void addQuote(String quoteText) {
+        executorService.execute(() -> {
+            Quote newQuote = new Quote(quoteText);
+            long quoteId = quoteDao.insertQuote(newQuote);
+            
+            // Reload quotes to get the updated list
+            requireActivity().runOnUiThread(() -> {
+                loadQuotes();
+                Toast.makeText(getContext(), "Quote added successfully", Toast.LENGTH_SHORT).show();
+            });
         });
     }
 }

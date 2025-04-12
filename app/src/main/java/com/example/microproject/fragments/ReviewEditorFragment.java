@@ -15,9 +15,9 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.RatingBar;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
-
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -39,13 +39,23 @@ import java.util.List;
 
 public class ReviewEditorFragment extends Fragment {
 
+    private static final String ARG_REVIEW_ID = "review_id";
     private RelativeLayout reviewCanvas;
     private List<ReviewElement> elements;
     private Review currentReview;
     private OnReviewSavedListener onReviewSavedListener;
+    private RatingBar ratingBar;
 
     public interface OnReviewSavedListener {
         void onReviewSaved(Review review);
+    }
+
+    public static ReviewEditorFragment newInstance(String reviewId) {
+        ReviewEditorFragment fragment = new ReviewEditorFragment();
+        Bundle args = new Bundle();
+        args.putString(ARG_REVIEW_ID, reviewId);
+        fragment.setArguments(args);
+        return fragment;
     }
 
     public void setOnReviewSavedListener(OnReviewSavedListener listener) {
@@ -58,8 +68,17 @@ public class ReviewEditorFragment extends Fragment {
         View view = inflater.inflate(R.layout.review_editor_layout, container, false);
 
         reviewCanvas = view.findViewById(R.id.reviewCanvas);
+        ratingBar = view.findViewById(R.id.ratingBar);
         elements = new ArrayList<>();
-        currentReview = new Review();
+        
+        // Initialize or load existing review
+        Bundle args = getArguments();
+        if (args != null && args.containsKey(ARG_REVIEW_ID)) {
+            String reviewId = args.getString(ARG_REVIEW_ID);
+            loadExistingReview(reviewId);
+        } else {
+            currentReview = new Review();
+        }
 
         // Set up the toolbar
         Toolbar toolbar = view.findViewById(R.id.toolbarReviewEditor);
@@ -67,6 +86,7 @@ public class ReviewEditorFragment extends Fragment {
             ((AppCompatActivity) getActivity()).setSupportActionBar(toolbar);
             ((AppCompatActivity) getActivity()).getSupportActionBar().setDisplayHomeAsUpEnabled(true);
             ((AppCompatActivity) getActivity()).getSupportActionBar().setDisplayShowHomeEnabled(true);
+            ((AppCompatActivity) getActivity()).getSupportActionBar().setTitle("Create Review");
         }
 
         // Set up buttons
@@ -79,13 +99,30 @@ public class ReviewEditorFragment extends Fragment {
         btnAddImage.setOnClickListener(v -> showImagePicker());
 
         btnCancel.setOnClickListener(v -> {
-            // Go back to the previous fragment
             getParentFragmentManager().popBackStack();
         });
 
-        btnSave.setOnClickListener(v -> saveReview());
+        btnSave.setOnClickListener(v -> {
+            // Show a toast to confirm the button is working
+            Toast.makeText(getContext(), "Saving review...", Toast.LENGTH_SHORT).show();
+            saveReview();
+        });
+
+        // Set up rating bar
+        ratingBar.setOnRatingBarChangeListener((ratingBar, rating, fromUser) -> {
+            if (currentReview != null) {
+                currentReview.setRating(rating);
+            }
+        });
 
         return view;
+    }
+
+    private void loadExistingReview(String reviewId) {
+        // TODO: Load review from database using reviewId
+        // For now, we'll just create a new review
+        currentReview = new Review();
+        currentReview.setId(reviewId);
     }
 
     private void showAddTextDialog() {
@@ -169,20 +206,21 @@ public class ReviewEditorFragment extends Fragment {
     }
 
     private void saveReview() {
-        // Ask for a title for the review
         AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
         builder.setTitle("Review Title");
 
-        // Set up the input
         final EditText input = new EditText(getContext());
         input.setInputType(InputType.TYPE_CLASS_TEXT);
+        if (currentReview.getTitle() != null) {
+            input.setText(currentReview.getTitle());
+        }
         builder.setView(input);
 
-        // Set up the buttons
         builder.setPositiveButton("Save", (dialog, which) -> {
             String title = input.getText().toString();
             if (!title.isEmpty()) {
                 currentReview.setTitle(title);
+                currentReview.setRating(ratingBar.getRating());
 
                 // Save the review canvas as an image
                 saveCanvasAsImage();
@@ -192,8 +230,13 @@ public class ReviewEditorFragment extends Fragment {
                     onReviewSavedListener.onReviewSaved(currentReview);
                 }
 
+                // Show success message
+                Toast.makeText(getContext(), "Review saved successfully!", Toast.LENGTH_SHORT).show();
+
                 // Go back to the previous fragment
                 getParentFragmentManager().popBackStack();
+            } else {
+                Toast.makeText(getContext(), "Please enter a title for your review", Toast.LENGTH_SHORT).show();
             }
         });
         builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());

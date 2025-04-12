@@ -13,8 +13,13 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 
 import com.example.microproject.R;
+import com.example.microproject.database.AppDatabase;
+import com.example.microproject.database.UserDao;
 import com.example.microproject.models.User;
 import com.google.android.material.textfield.TextInputEditText;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class EditProfileFragment extends Fragment {
     private TextInputEditText usernameEditText, bioEditText;
@@ -22,6 +27,8 @@ public class EditProfileFragment extends Fragment {
     private ImageView profileImageView;
     private Button saveButton, cancelButton, selectImageButton;
     private User user;
+    private UserDao userDao;
+    private ExecutorService executorService;
 
     @Nullable
     @Override
@@ -46,19 +53,21 @@ public class EditProfileFragment extends Fragment {
         cancelButton = view.findViewById(R.id.btnCancel);
         selectImageButton = view.findViewById(R.id.btnSelectImage);
 
+        // Initialize Room database
+        AppDatabase database = AppDatabase.getInstance(requireContext());
+        userDao = database.userDao();
+        executorService = Executors.newSingleThreadExecutor();
+
         // Retrieve user data from bundle
         Bundle bundle = getArguments();
         if (bundle != null && bundle.containsKey("user")) {
             user = bundle.getParcelable("user");
             populateFields();
-        } else {
-            user = new User("", "", 0, 0, 0);
         }
 
         // Set click listeners
         saveButton.setOnClickListener(v -> saveProfile());
         cancelButton.setOnClickListener(v -> navigateBack());
-        selectImageButton.setOnClickListener(v -> selectImage());
     }
 
     private void populateFields() {
@@ -70,40 +79,43 @@ public class EditProfileFragment extends Fragment {
     }
 
     private void saveProfile() {
-        // Update user object with new values
-        user.setName(usernameEditText.getText().toString());
-        user.setBio(bioEditText.getText().toString());
-
-        try {
-            user.setTotalBooksRead(Integer.parseInt(totalBooksReadEditText.getText().toString()));
-            user.setCurrentlyReading(Integer.parseInt(currentlyReadingEditText.getText().toString()));
-            user.setBooksReadThisYear(Integer.parseInt(yearlyReadEditText.getText().toString()));
-        } catch (NumberFormatException e) {
-            // Handle invalid number inputs
+        if (user == null) {
+            return; // Prevent crash if user is null
         }
 
-        // Create a new ProfileFragment with updated user data
-        ProfileFragment profileFragment = new ProfileFragment();
-        Bundle bundle = new Bundle();
-        bundle.putParcelable("user", user);
-        profileFragment.setArguments(bundle);
+        // Get values from EditText fields safely
+        String name = usernameEditText.getText() != null ? usernameEditText.getText().toString() : "";
+        String bio = bioEditText.getText() != null ? bioEditText.getText().toString() : "";
+
+        user.setName(name);
+        user.setBio(bio);
+
+        try {
+            user.setTotalBooksRead(
+                    !totalBooksReadEditText.getText().toString().isEmpty() ?
+                            Integer.parseInt(totalBooksReadEditText.getText().toString()) : 0
+            );
+            user.setCurrentlyReading(
+                    !currentlyReadingEditText.getText().toString().isEmpty() ?
+                            Integer.parseInt(currentlyReadingEditText.getText().toString()) : 0
+            );
+            user.setBooksReadThisYear(
+                    !yearlyReadEditText.getText().toString().isEmpty() ?
+                            Integer.parseInt(yearlyReadEditText.getText().toString()) : 0
+            );
+        } catch (NumberFormatException e) {
+            e.printStackTrace();
+        }
+
+        // Update user in Room database
+        executorService.execute(() -> userDao.update(user));
 
         // Navigate back to ProfileFragment
-        FragmentManager fragmentManager = getParentFragmentManager();
-        fragmentManager.beginTransaction()
-                .replace(R.id.fragment_container, profileFragment)
-                .commit();
+        navigateBack();
     }
 
     private void navigateBack() {
-        // Go back to previous fragment
         FragmentManager fragmentManager = getParentFragmentManager();
         fragmentManager.popBackStack();
-    }
-
-    private void selectImage() {
-        // Implement image selection functionality
-        // This would typically involve launching an intent to select an image from the gallery
-        // For now, we'll just show a placeholder implementation
     }
 }

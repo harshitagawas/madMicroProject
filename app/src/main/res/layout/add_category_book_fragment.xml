@@ -5,9 +5,10 @@
     android:orientation="vertical"
     android:padding="10dp">
     <TextView
+        android:id="@+id/category_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Add Books You Own in this Category"
+        android:text="Books in this Category"
         android:layout_marginBottom="20dp"
         android:textSize="20sp"
         android:layout_gravity="center_horizontal"

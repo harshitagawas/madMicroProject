@@ -51,7 +51,8 @@ dependencies {
 
     // Lifecycle components (Optional, if using LiveData)
     implementation(libs.lifecycle.livedata)
-
+    implementation(libs.cardview)
+    implementation(libs.recyclerview)
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)

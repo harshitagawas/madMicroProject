@@ -7,33 +7,40 @@
     android:orientation="vertical"
     android:padding="16dp">
 
-    <TextView
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Review The Books You Own!!!"
-        android:textSize="20sp"
-        android:layout_gravity="center_horizontal"
-        android:layout_marginBottom="16dp" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="16dp">
 
-    <Button
-        android:id="@+id/btnAddReview"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Add Review"
-        android:layout_gravity="center_horizontal"
-        android:layout_marginBottom="16dp" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Sort by:"
+            android:textSize="16sp"
+            android:layout_marginEnd="8dp"/>
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Your Reviews:"
-        android:textSize="18sp"
-        android:layout_marginBottom="8dp" />
+        <Spinner
+            android:id="@+id/sortSpinner"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"/>
+
+        <Button
+            android:id="@+id/btnAddReview"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Add Review"
+            android:layout_marginStart="8dp"/>
+    </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/reviewRecyclerView"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:clipToPadding="false"
-        android:paddingTop="10dp"/>
+        android:paddingBottom="8dp"/>
+
 </LinearLayout>

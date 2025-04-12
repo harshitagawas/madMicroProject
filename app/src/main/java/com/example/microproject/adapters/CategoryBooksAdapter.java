@@ -37,9 +37,19 @@ public class CategoryBooksAdapter extends RecyclerView.Adapter<CategoryBooksAdap
         CategoryBook book = categoryBooks.get(position);
         holder.bookTitle.setText(book.getName());
 
-        Uri imageUri = book.getImageUri();
-        if (imageUri != null) {
-            holder.bookImage.setImageURI(imageUri);
+        try {
+            Uri imageUri = book.getImageUri();
+            if (imageUri != null) {
+                holder.bookImage.setImageURI(imageUri);
+                holder.bookImage.setVisibility(View.VISIBLE);
+            } else {
+                // Set a default image or hide the ImageView
+                holder.bookImage.setVisibility(View.GONE);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            // Handle image loading error
+            holder.bookImage.setVisibility(View.GONE);
         }
     }
 

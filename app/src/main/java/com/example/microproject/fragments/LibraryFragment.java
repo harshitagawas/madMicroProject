@@ -8,6 +8,7 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
@@ -75,12 +76,20 @@ public class LibraryFragment extends Fragment {
     
     private void loadCategories() {
         executorService.execute(() -> {
-            List<Category> categoryList = database.categoryDao().getAllCategories();
-            requireActivity().runOnUiThread(() -> {
-                categories.clear();
-                categories.addAll(categoryList);
-                categoryAdapter.notifyDataSetChanged();
-            });
+            try {
+                List<Category> categoryList = database.categoryDao().getAllCategories();
+                requireActivity().runOnUiThread(() -> {
+                    categories.clear();
+                    categories.addAll(categoryList);
+                    categoryAdapter.notifyDataSetChanged();
+                });
+            } catch (Exception e) {
+                e.printStackTrace();
+                requireActivity().runOnUiThread(() -> {
+                    Toast.makeText(getContext(), "Error loading categories: " + e.getMessage(), 
+                                  Toast.LENGTH_SHORT).show();
+                });
+            }
         });
     }
 
@@ -113,6 +122,9 @@ public class LibraryFragment extends Fragment {
                 Category category = new Category(name);
                 saveCategory(category);
                 dialog.dismiss();
+            } else {
+                Toast.makeText(getContext(), "Please enter a category name", 
+                              Toast.LENGTH_SHORT).show();
             }
         });
         
@@ -121,9 +133,21 @@ public class LibraryFragment extends Fragment {
     
     private void saveCategory(Category category) {
         executorService.execute(() -> {
-            long id = database.categoryDao().insertCategory(category);
-            category.setId((int) id);  // Update the category with the new ID
-            loadCategories(); // Reload the list after adding
+            try {
+                long id = database.categoryDao().insertCategory(category);
+                category.setId((int) id);  // Update the category with the new ID
+                requireActivity().runOnUiThread(() -> {
+                    loadCategories(); // Reload the list after adding
+                    Toast.makeText(getContext(), "Category added successfully", 
+                                  Toast.LENGTH_SHORT).show();
+                });
+            } catch (Exception e) {
+                e.printStackTrace();
+                requireActivity().runOnUiThread(() -> {
+                    Toast.makeText(getContext(), "Error saving category: " + e.getMessage(), 
+                                  Toast.LENGTH_SHORT).show();
+                });
+            }
         });
     }
 

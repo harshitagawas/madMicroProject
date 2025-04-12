@@ -64,6 +64,19 @@ public class CategoryBooksFragment extends Fragment {
         }
         database = AppDatabase.getInstance(requireContext());
         executorService = Executors.newSingleThreadExecutor();
+        
+        // Initialize image picker launcher
+        imagePickerLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                        selectedImageUri = result.getData().getData();
+                        if (imagePreview != null && selectedImageUri != null) {
+                            imagePreview.setImageURI(selectedImageUri);
+                            imagePreview.setVisibility(View.VISIBLE);
+                        }
+                    }
+                });
     }
 
     @Nullable
@@ -92,89 +105,106 @@ public class CategoryBooksFragment extends Fragment {
         
         // Load books for this category
         loadCategoryBooks();
-
-        imagePickerLauncher = registerForActivityResult(
-                new ActivityResultContracts.StartActivityForResult(),
-                result -> {
-                    if (result.getResultCode() == RESULT_OK && result.getData() != null) {
-                        selectedImageUri = result.getData().getData();
-                        if (imagePreview != null) {
-                            imagePreview.setImageURI(selectedImageUri);
-                        }
-                    }
-                });
     }
     
     private void loadCategoryName(View view) {
-        executorService.execute(() -> {
-            Category category = database.categoryDao().getCategoryById(categoryId);
-            if (category != null) {
-                requireActivity().runOnUiThread(() -> {
-                    // Update title if there's a TextView for it
-                    TextView titleView = view.findViewById(R.id.category_title);
-                    if (titleView != null) {
-                        titleView.setText(category.getName() + " Books");
-                    }
-                });
-            }
-        });
+        TextView categoryTitle = view.findViewById(R.id.category_title);
+        if (categoryTitle != null) {
+            executorService.execute(() -> {
+                Category category = database.categoryDao().getCategoryById(categoryId);
+                if (category != null) {
+                    requireActivity().runOnUiThread(() -> {
+                        categoryTitle.setText("Books in " + category.getName());
+                    });
+                } else {
+                    requireActivity().runOnUiThread(() -> {
+                        categoryTitle.setText("Category Not Found");
+                        Toast.makeText(getContext(), "Category not found", Toast.LENGTH_SHORT).show();
+                    });
+                }
+            });
+        }
     }
     
     private void loadCategoryBooks() {
         executorService.execute(() -> {
-            List<CategoryBook> books = database.categoryBookDao()
-                    .getCategoryBooksByCategoryId(categoryId);
-            requireActivity().runOnUiThread(() -> {
-                categoryBooks.clear();
-                categoryBooks.addAll(books);
-                adapter.notifyDataSetChanged();
-            });
+            try {
+                List<CategoryBook> books = database.categoryBookDao().getCategoryBooksByCategoryId(categoryId);
+                requireActivity().runOnUiThread(() -> {
+                    categoryBooks.clear();
+                    categoryBooks.addAll(books);
+                    adapter.notifyDataSetChanged();
+                });
+            } catch (Exception e) {
+                e.printStackTrace();
+                requireActivity().runOnUiThread(() -> {
+                    Toast.makeText(getContext(), "Error loading books: " + e.getMessage(), 
+                                Toast.LENGTH_SHORT).show();
+                });
+            }
         });
     }
-
+    
     private void showAddBookDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
-        builder.setTitle("Add Book");
-
-        View dialogView = getLayoutInflater().inflate(R.layout.dialog_add_category_books, null);
+        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_add_book, null);
+        
         EditText bookNameInput = dialogView.findViewById(R.id.book_name_input);
         Button selectImageButton = dialogView.findViewById(R.id.select_image_button);
         imagePreview = dialogView.findViewById(R.id.image_preview);
-
+        
+        builder.setView(dialogView)
+               .setTitle("Add New Book")
+               .setPositiveButton("Add", (dialog, which) -> {
+                   String bookName = bookNameInput.getText().toString().trim();
+                   if (!bookName.isEmpty()) {
+                       CategoryBook book;
+                       if (selectedImageUri != null) {
+                           book = new CategoryBook(bookName, selectedImageUri);
+                       } else {
+                           book = new CategoryBook(bookName, (String) null, categoryId);
+                       }
+                       book.setCategoryId(categoryId);
+                       saveCategoryBook(book);
+                   } else {
+                       Toast.makeText(getContext(), "Please enter a book name", 
+                                     Toast.LENGTH_SHORT).show();
+                   }
+               })
+               .setNegativeButton("Cancel", null);
+        
+        AlertDialog dialog = builder.create();
+        
         selectImageButton.setOnClickListener(v -> pickImage());
-
-        builder.setView(dialogView);
-        builder.setPositiveButton("Add", (dialog, which) -> {
-            String bookName = bookNameInput.getText().toString().trim();
-            if (!bookName.isEmpty() && selectedImageUri != null) {
-                saveCategoryBook(new CategoryBook(bookName, selectedImageUri));
-            } else {
-                Toast.makeText(getContext(), "Enter book name and select an image", Toast.LENGTH_SHORT).show();
-            }
-        });
-
-        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.dismiss());
-        builder.show();
+        
+        dialog.show();
     }
     
     private void saveCategoryBook(CategoryBook categoryBook) {
-        // Set the category ID for this book
-        categoryBook.setCategoryId(categoryId);
-        
         executorService.execute(() -> {
-            // Insert the book and get its ID
-            long id = database.categoryBookDao().insertCategoryBook(categoryBook);
-            
-            // Reload the books list
-            loadCategoryBooks();
+            try {
+                long id = database.categoryBookDao().insertCategoryBook(categoryBook);
+                categoryBook.setId((int) id);
+                requireActivity().runOnUiThread(() -> {
+                    loadCategoryBooks();
+                    Toast.makeText(getContext(), "Book added successfully", 
+                                  Toast.LENGTH_SHORT).show();
+                });
+            } catch (Exception e) {
+                e.printStackTrace();
+                requireActivity().runOnUiThread(() -> {
+                    Toast.makeText(getContext(), "Error saving book: " + e.getMessage(), 
+                                  Toast.LENGTH_SHORT).show();
+                });
+            }
         });
     }
-
+    
     private void pickImage() {
         Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
         imagePickerLauncher.launch(intent);
     }
-    
+
     @Override
     public void onDestroy() {
         super.onDestroy();

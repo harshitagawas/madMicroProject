@@ -4,6 +4,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentManager;
@@ -40,11 +41,18 @@ public class CategoryAdapter extends RecyclerView.Adapter<CategoryAdapter.Catego
 
         // Set click listener on the shelf
         holder.shelf.setOnClickListener(v -> {
-            fragmentManager.beginTransaction()
-                    .replace(R.id.fragment_container, 
-                             CategoryBooksFragment.newInstance(category.getId()))
-                    .addToBackStack(null) // Allows back navigation
-                    .commit();
+            try {
+                fragmentManager.beginTransaction()
+                        .replace(R.id.fragment_container, 
+                                 CategoryBooksFragment.newInstance(category.getId()))
+                        .addToBackStack(null) // Allows back navigation
+                        .commit();
+            } catch (Exception e) {
+                e.printStackTrace();
+                Toast.makeText(v.getContext(), 
+                              "Error opening category: " + e.getMessage(), 
+                              Toast.LENGTH_SHORT).show();
+            }
         });
     }
 

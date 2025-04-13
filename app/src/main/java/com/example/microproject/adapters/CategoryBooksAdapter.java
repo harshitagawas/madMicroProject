@@ -1,6 +1,8 @@
 package com.example.microproject.adapters;
 
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -15,6 +17,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.microproject.R;
 import com.example.microproject.models.CategoryBook;
 
+import java.io.File;
 import java.util.List;
 
 public class CategoryBooksAdapter extends RecyclerView.Adapter<CategoryBooksAdapter.CategoryBooksViewHolder> {
@@ -40,28 +43,34 @@ public class CategoryBooksAdapter extends RecyclerView.Adapter<CategoryBooksAdap
         holder.bookTitle.setText(book.getName());
 
         try {
-            // First try to get the Uri directly
-            Uri imageUri = book.getImageUri();
+            // Log the book details for debugging
+            Log.d(TAG, "Binding book: " + book.getName() + ", Image path: " + book.getImageUriString());
             
-            // If that's null, try to parse the string
-            if (imageUri == null && book.getImageUriString() != null && !book.getImageUriString().isEmpty()) {
-                imageUri = Uri.parse(book.getImageUriString());
-                // Update the book's Uri for future use
-                book.setImageUri(imageUri);
-            }
-            
-            if (imageUri != null) {
-                Log.d(TAG, "Loading image from URI: " + imageUri.toString());
-                holder.bookImage.setImageURI(imageUri);
-                holder.bookImage.setVisibility(View.VISIBLE);
+            // Check if we have a file path
+            String imagePath = book.getImageUriString();
+            if (imagePath != null && !imagePath.isEmpty()) {
+                // Try to load the image from the file path
+                File imageFile = new File(imagePath);
+                if (imageFile.exists()) {
+                    Log.d(TAG, "Loading image from file: " + imagePath);
+                    Bitmap bitmap = BitmapFactory.decodeFile(imagePath);
+                    if (bitmap != null) {
+                        holder.bookImage.setImageBitmap(bitmap);
+                        holder.bookImage.setVisibility(View.VISIBLE);
+                    } else {
+                        Log.e(TAG, "Failed to decode bitmap from file: " + imagePath);
+                        holder.bookImage.setVisibility(View.GONE);
+                    }
+                } else {
+                    Log.e(TAG, "Image file does not exist: " + imagePath);
+                    holder.bookImage.setVisibility(View.GONE);
+                }
             } else {
-                Log.d(TAG, "No image URI available for book: " + book.getName());
-                // Set a default image or hide the ImageView
+                Log.d(TAG, "No image path available for book: " + book.getName());
                 holder.bookImage.setVisibility(View.GONE);
             }
         } catch (Exception e) {
             Log.e(TAG, "Error loading image for book: " + book.getName(), e);
-            // Handle image loading error
             holder.bookImage.setVisibility(View.GONE);
         }
     }

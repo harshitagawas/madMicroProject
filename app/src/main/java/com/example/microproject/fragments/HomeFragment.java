@@ -30,6 +30,7 @@ import com.example.microproject.fragments.ProfileFragment;
 import com.example.microproject.models.ReadingProgress;
 import com.example.microproject.models.Streak;
 
+import java.util.Calendar;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -111,51 +112,82 @@ public class HomeFragment extends Fragment {
             // Get the latest streak from the database
             currentStreak = streakDao.getLatestStreak();
             
-            // Check if the streak is from today (within 24 hours)
-            long currentTime = System.currentTimeMillis();
-            long oneDayInMillis = 24 * 60 * 60 * 1000;
+            // Get today's date at midnight
+            Calendar calendar = Calendar.getInstance();
+            calendar.set(Calendar.HOUR_OF_DAY, 0);
+            calendar.set(Calendar.MINUTE, 0);
+            calendar.set(Calendar.SECOND, 0);
+            calendar.set(Calendar.MILLISECOND, 0);
+            long todayStart = calendar.getTimeInMillis();
             
             if (currentStreak != null) {
-                // If the streak is older than 24 hours, reset it
-                if (currentTime - currentStreak.getLastUpdated() > oneDayInMillis) {
-                    streakCount = 0;
-                    // Delete old streaks
-                    streakDao.deleteOldStreaks(currentTime - oneDayInMillis);
-                } else {
+                // Get the last updated date at midnight
+                calendar.setTimeInMillis(currentStreak.getLastUpdated());
+                calendar.set(Calendar.HOUR_OF_DAY, 0);
+                calendar.set(Calendar.MINUTE, 0);
+                calendar.set(Calendar.SECOND, 0);
+                calendar.set(Calendar.MILLISECOND, 0);
+                long lastUpdatedDay = calendar.getTimeInMillis();
+                
+                // If the streak is from a different day, reset the UI
+                if (lastUpdatedDay < todayStart) {
                     streakCount = currentStreak.getStreakCount();
+                    requireActivity().runOnUiThread(() -> {
+                        streakContainer.setVisibility(View.VISIBLE);
+                        streakResultContainer.setVisibility(View.GONE);
+                    });
+                } else {
+                    // Streak was already updated today, show the result
+                    streakCount = currentStreak.getStreakCount();
+                    requireActivity().runOnUiThread(() -> {
+                        streakContainer.setVisibility(View.GONE);
+                        showStreakSuccess("Current streak: " + streakCount + " days!");
+                    });
                 }
             } else {
                 // No streak exists yet
                 streakCount = 0;
+                requireActivity().runOnUiThread(() -> {
+                    streakContainer.setVisibility(View.VISIBLE);
+                    streakResultContainer.setVisibility(View.GONE);
+                });
             }
-            
-            // Update UI on the main thread
-            requireActivity().runOnUiThread(() -> {
-                // Update UI based on streak count
-                if (streakCount > 0) {
-                    showStreakSuccess("Current streak: " + streakCount + " days!");
-                }
-            });
         });
     }
 
     private void updateStreak(boolean increment) {
         executorService.execute(() -> {
-            long currentTime = System.currentTimeMillis();
+            // Get today's date at midnight
+            Calendar calendar = Calendar.getInstance();
+            calendar.set(Calendar.HOUR_OF_DAY, 0);
+            calendar.set(Calendar.MINUTE, 0);
+            calendar.set(Calendar.SECOND, 0);
+            calendar.set(Calendar.MILLISECOND, 0);
+            long todayStart = calendar.getTimeInMillis();
             
             if (currentStreak == null) {
                 // Create a new streak
-                currentStreak = new Streak(increment ? 1 : 0, currentTime);
+                currentStreak = new Streak(increment ? 1 : 0, todayStart);
                 streakDao.insertStreak(currentStreak);
             } else {
-                // Update existing streak
-                if (increment) {
-                    currentStreak.setStreakCount(currentStreak.getStreakCount() + 1);
-                } else {
-                    currentStreak.setStreakCount(0);
+                // Get the last updated date at midnight
+                calendar.setTimeInMillis(currentStreak.getLastUpdated());
+                calendar.set(Calendar.HOUR_OF_DAY, 0);
+                calendar.set(Calendar.MINUTE, 0);
+                calendar.set(Calendar.SECOND, 0);
+                calendar.set(Calendar.MILLISECOND, 0);
+                long lastUpdatedDay = calendar.getTimeInMillis();
+                
+                if (lastUpdatedDay < todayStart) {
+                    // It's a new day, update the streak
+                    if (increment) {
+                        currentStreak.setStreakCount(currentStreak.getStreakCount() + 1);
+                    } else {
+                        currentStreak.setStreakCount(0);
+                    }
+                    currentStreak.setLastUpdated(todayStart);
+                    streakDao.updateStreak(currentStreak);
                 }
-                currentStreak.setLastUpdated(currentTime);
-                streakDao.updateStreak(currentStreak);
             }
         });
     }
@@ -341,6 +373,12 @@ public class HomeFragment extends Fragment {
 
             // Display the progress bar
             displayProgressBar(currentPageNum, totalPages);
+            
+            // Check if book is completed (current pages equals total pages)
+            if (currentPageNum == totalPages) {
+                showConfettiAnimation();
+                Toast.makeText(requireContext(), "Congratulations! You completed the book!", Toast.LENGTH_LONG).show();
+            }
 
         } catch (NumberFormatException e) {
             Toast.makeText(requireContext(), "Please enter valid numbers!", Toast.LENGTH_SHORT).show();
@@ -366,5 +404,47 @@ public class HomeFragment extends Fragment {
                 .replace(R.id.fragment_container, new ProfileFragment()) // Make sure fragment_container exists in activity_main.xml
                 .addToBackStack(null) // Allows going back to HomeFragment when pressing back
                 .commit();
+    }
+
+    // Method to show confetti animation when book is completed
+    private void showConfettiAnimation() {
+        // Create a new LottieAnimationView for confetti
+        LottieAnimationView confettiAnimation = new LottieAnimationView(requireContext());
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT);
+        confettiAnimation.setLayoutParams(params);
+        confettiAnimation.setAnimation(R.raw.confetti);
+        confettiAnimation.setRepeatCount(0); // Play only once
+        
+        // Add the animation to the progress container
+        progressContainer.addView(confettiAnimation);
+        
+        // Play the animation
+        confettiAnimation.playAnimation();
+        
+        // Set up animation listener to remove the view after animation completes
+        confettiAnimation.addAnimatorListener(new Animator.AnimatorListener() {
+            @Override
+            public void onAnimationStart(Animator animation) {
+                // Animation started
+            }
+
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                // Remove the animation view after it completes
+                progressContainer.removeView(confettiAnimation);
+            }
+
+            @Override
+            public void onAnimationCancel(Animator animation) {
+                // Animation was cancelled
+            }
+
+            @Override
+            public void onAnimationRepeat(Animator animation) {
+                // Animation repeated
+            }
+        });
     }
 }

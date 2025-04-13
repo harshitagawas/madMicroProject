@@ -3,10 +3,16 @@ package com.example.microproject.fragments;
 import static android.app.Activity.RESULT_OK;
 
 import android.app.AlertDialog;
+import android.content.ContentResolver;
+import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.provider.MediaStore;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -30,8 +36,16 @@ import com.example.microproject.database.AppDatabase;
 import com.example.microproject.models.Category;
 import com.example.microproject.models.CategoryBook;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -47,6 +61,8 @@ public class CategoryBooksFragment extends Fragment {
     private int categoryId;
     private AppDatabase database;
     private ExecutorService executorService;
+    private String savedImagePath;
+    private static final String TAG = "CategoryBooksFragment";
     
     public static CategoryBooksFragment newInstance(int categoryId) {
         CategoryBooksFragment fragment = new CategoryBooksFragment();
@@ -74,6 +90,17 @@ public class CategoryBooksFragment extends Fragment {
                         if (imagePreview != null && selectedImageUri != null) {
                             imagePreview.setImageURI(selectedImageUri);
                             imagePreview.setVisibility(View.VISIBLE);
+                            
+                            // Log the selected image URI for debugging
+                            Log.d(TAG, "Selected image URI: " + selectedImageUri.toString());
+                            
+                            // Copy the image to app's private storage
+                            savedImagePath = copyImageToPrivateStorage(selectedImageUri);
+                            if (savedImagePath != null) {
+                                Log.d(TAG, "Image saved to: " + savedImagePath);
+                            } else {
+                                Log.e(TAG, "Failed to save image");
+                            }
                         }
                     }
                 });
@@ -163,6 +190,7 @@ public class CategoryBooksFragment extends Fragment {
         
         // Reset selected image
         selectedImageUri = null;
+        savedImagePath = null;
         if (imagePreview != null) {
             imagePreview.setVisibility(View.GONE);
         }
@@ -173,10 +201,9 @@ public class CategoryBooksFragment extends Fragment {
                    String bookName = bookNameInput.getText().toString().trim();
                    if (!bookName.isEmpty()) {
                        CategoryBook book;
-                       if (selectedImageUri != null) {
-                           // Create book with image
-                           book = new CategoryBook(bookName, selectedImageUri);
-                           book.setCategoryId(categoryId);
+                       if (savedImagePath != null) {
+                           // Create book with saved image path
+                           book = new CategoryBook(bookName, savedImagePath, categoryId);
                        } else {
                            // Create book without image
                            book = new CategoryBook(bookName, (String) null, categoryId);
@@ -201,6 +228,15 @@ public class CategoryBooksFragment extends Fragment {
             try {
                 // Make sure categoryId is set
                 categoryBook.setCategoryId(categoryId);
+                
+                // Ensure imageUriString is set from the Uri if available
+                if (categoryBook.getImageUri() != null && 
+                    (categoryBook.getImageUriString() == null || categoryBook.getImageUriString().isEmpty())) {
+                    categoryBook.setImageUriString(categoryBook.getImageUri().toString());
+                }
+                
+                // Log the image URI string for debugging
+                Log.d("CategoryBooksFragment", "Saving book with image URI string: " + categoryBook.getImageUriString());
                 
                 // Insert the book and get its ID
                 long id = database.categoryBookDao().insertCategoryBook(categoryBook);
@@ -229,6 +265,41 @@ public class CategoryBooksFragment extends Fragment {
             e.printStackTrace();
             Toast.makeText(getContext(), "Error selecting image: " + e.getMessage(), 
                           Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /**
+     * Copies the selected image to the app's private storage and returns the path
+     */
+    private String copyImageToPrivateStorage(Uri sourceUri) {
+        try {
+            // Create a unique filename
+            String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+            String imageFileName = "BOOK_IMG_" + timeStamp + ".jpg";
+            
+            // Get the app's private directory
+            File storageDir = requireContext().getFilesDir();
+            File imageFile = new File(storageDir, imageFileName);
+            
+            // Copy the image
+            ContentResolver contentResolver = requireContext().getContentResolver();
+            InputStream inputStream = contentResolver.openInputStream(sourceUri);
+            OutputStream outputStream = new FileOutputStream(imageFile);
+            
+            byte[] buffer = new byte[1024];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
+            
+            inputStream.close();
+            outputStream.close();
+            
+            // Return the absolute path to the saved image
+            return imageFile.getAbsolutePath();
+        } catch (IOException e) {
+            Log.e(TAG, "Error copying image: " + e.getMessage(), e);
+            return null;
         }
     }
 

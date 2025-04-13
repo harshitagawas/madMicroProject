@@ -5,12 +5,14 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.animation.Animator;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -31,6 +33,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import com.airbnb.lottie.LottieAnimationView;
 
 public class GoalsFragment extends Fragment {
 
@@ -102,25 +106,63 @@ public class GoalsFragment extends Fragment {
 
     private void loadOrCreateGoals() {
         executorService.execute(() -> {
-            // Check if goals exist in the database using the synchronous method
-            List<Goal> existingGoals = goalDao.getAllGoalsSync();
-            
-            if (existingGoals == null || existingGoals.isEmpty()) {
-                // Create default goals if none exist
-                createDefaultGoals();
-            } else {
-                // Load existing goals
-                goals = existingGoals;
-                requireActivity().runOnUiThread(() -> {
-                    // Update checkboxes based on loaded goals
-                    for (int i = 0; i < goals.size() && i < goalCheckBoxes.size(); i++) {
-                        goalCheckBoxes.get(i).setChecked(goals.get(i).isCompleted());
+            try {
+                // Get today's date at midnight
+                Calendar calendar = Calendar.getInstance();
+                calendar.set(Calendar.HOUR_OF_DAY, 0);
+                calendar.set(Calendar.MINUTE, 0);
+                calendar.set(Calendar.SECOND, 0);
+                calendar.set(Calendar.MILLISECOND, 0);
+                long todayStart = calendar.getTimeInMillis();
+                
+                // Check if goals exist in the database using the synchronous method
+                List<Goal> existingGoals = goalDao.getAllGoalsSync();
+                
+                if (existingGoals == null || existingGoals.isEmpty()) {
+                    // Create default goals if none exist
+                    createDefaultGoals();
+                } else {
+                    // Load existing goals
+                    goals = existingGoals;
+                    
+                    // Check if we need to reset goals for the new day
+                    boolean needsReset = false;
+                    for (Goal goal : goals) {
+                        Calendar goalCalendar = Calendar.getInstance();
+                        goalCalendar.setTimeInMillis(goal.getTimestamp());
+                        goalCalendar.set(Calendar.HOUR_OF_DAY, 0);
+                        goalCalendar.set(Calendar.MINUTE, 0);
+                        goalCalendar.set(Calendar.SECOND, 0);
+                        goalCalendar.set(Calendar.MILLISECOND, 0);
+                        
+                        if (goalCalendar.getTimeInMillis() < todayStart) {
+                            needsReset = true;
+                            break;
+                        }
                     }
-                });
+                    
+                    if (needsReset) {
+                        // Reset all goals for the new day
+                        for (Goal goal : goals) {
+                            goal.setCompleted(false);
+                            goal.setTimestamp(todayStart);
+                            goalDao.updateGoal(goal);
+                        }
+                    }
+                    
+                    requireActivity().runOnUiThread(() -> {
+                        // Update checkboxes based on loaded goals
+                        for (int i = 0; i < goals.size() && i < goalCheckBoxes.size(); i++) {
+                            goalCheckBoxes.get(i).setChecked(goals.get(i).isCompleted());
+                        }
+                    });
+                }
+                
+                // Load today's progress if it exists
+                loadTodayProgress();
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-            
-            // Load today's progress if it exists
-            loadTodayProgress();
         });
     }
     
@@ -148,24 +190,59 @@ public class GoalsFragment extends Fragment {
     
     private void loadTodayProgress() {
         executorService.execute(() -> {
-            // Get today's date at midnight
-            Calendar calendar = Calendar.getInstance();
-            calendar.set(Calendar.HOUR_OF_DAY, 0);
-            calendar.set(Calendar.MINUTE, 0);
-            calendar.set(Calendar.SECOND, 0);
-            calendar.set(Calendar.MILLISECOND, 0);
-            long todayStart = calendar.getTimeInMillis();
-            
-            // Get progress for today
-            DailyGoalProgress todayProgress = dailyGoalProgressDao.getProgressForDate(todayStart);
-            
-            if (todayProgress != null) {
-                requireActivity().runOnUiThread(() -> {
-                    // Update progress bar
-                    int progressPercentage = (todayProgress.getCompletedGoals() * 100) / todayProgress.getTotalGoals();
-                    progressBar.setProgress(progressPercentage);
-                    textViewProgress.setText(progressPercentage + "% Complete");
-                });
+            try {
+                // Get today's date at midnight
+                Calendar calendar = Calendar.getInstance();
+                calendar.set(Calendar.HOUR_OF_DAY, 0);
+                calendar.set(Calendar.MINUTE, 0);
+                calendar.set(Calendar.SECOND, 0);
+                calendar.set(Calendar.MILLISECOND, 0);
+                long todayStart = calendar.getTimeInMillis();
+                
+                // Get progress for today
+                DailyGoalProgress todayProgress = dailyGoalProgressDao.getProgressForDate(todayStart);
+                
+                if (todayProgress != null) {
+                    // Check if the progress is from today
+                    Calendar progressCalendar = Calendar.getInstance();
+                    progressCalendar.setTimeInMillis(todayProgress.getDate());
+                    progressCalendar.set(Calendar.HOUR_OF_DAY, 0);
+                    progressCalendar.set(Calendar.MINUTE, 0);
+                    progressCalendar.set(Calendar.SECOND, 0);
+                    progressCalendar.set(Calendar.MILLISECOND, 0);
+                    
+                    if (progressCalendar.getTimeInMillis() < todayStart) {
+                        // Progress is from a previous day, create new progress for today
+                        DailyGoalProgress newProgress = new DailyGoalProgress(0, goalCheckBoxes.size(), 0, calculateTotalRequiredGoals(), 0);
+                        newProgress.setDate(todayStart);
+                        dailyGoalProgressDao.insertProgress(newProgress);
+                        
+                        requireActivity().runOnUiThread(() -> {
+                            progressBar.setProgress(0);
+                            textViewProgress.setText("0% Complete");
+                        });
+                    } else {
+                        // Progress is from today, update UI
+                        requireActivity().runOnUiThread(() -> {
+                            int progressPercentage = (todayProgress.getTotalGoals() > 0) ? 
+                                (todayProgress.getCompletedGoals() * 100) / todayProgress.getTotalGoals() : 0;
+                            progressBar.setProgress(progressPercentage);
+                            textViewProgress.setText(progressPercentage + "% Complete");
+                        });
+                    }
+                } else {
+                    // No progress for today, create new progress
+                    DailyGoalProgress newProgress = new DailyGoalProgress(0, goalCheckBoxes.size(), 0, calculateTotalRequiredGoals(), 0);
+                    newProgress.setDate(todayStart);
+                    dailyGoalProgressDao.insertProgress(newProgress);
+                    
+                    requireActivity().runOnUiThread(() -> {
+                        progressBar.setProgress(0);
+                        textViewProgress.setText("0% Complete");
+                    });
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         });
     }
@@ -190,36 +267,138 @@ public class GoalsFragment extends Fragment {
         for (int i = 0; i < goalCheckBoxes.size(); i++) {
             final int index = i;
             goalCheckBoxes.get(i).setOnCheckedChangeListener((buttonView, isChecked) -> {
-                if (goals.size() > index) {
-                    goals.get(index).setCompleted(isChecked);
-                    updateProgress();
+                try {
+                    if (goals != null && goals.size() > index) {
+                        goals.get(index).setCompleted(isChecked);
+                        updateProgress();
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
             });
         }
     }
 
     private void updateProgress() {
-        int totalGoals = goalCheckBoxes.size();
-        int completedGoals = 0;
-        int requiredGoalsCompleted = 0;
-        int totalRequiredGoals = 0;
+        try {
+            int totalGoals = goalCheckBoxes.size();
+            int completedGoals = 0;
+            int requiredGoalsCompleted = 0;
+            int totalRequiredGoals = 0;
 
-        for (int i = 0; i < goalCheckBoxes.size(); i++) {
-            if (goalCheckBoxes.get(i).isChecked()) {
-                completedGoals++;
+            for (int i = 0; i < goalCheckBoxes.size(); i++) {
+                if (goalCheckBoxes.get(i).isChecked()) {
+                    completedGoals++;
+                    if (isRequiredGoal.get(i)) {
+                        requiredGoalsCompleted++;
+                    }
+                }
                 if (isRequiredGoal.get(i)) {
-                    requiredGoalsCompleted++;
+                    totalRequiredGoals++;
                 }
             }
-            if (isRequiredGoal.get(i)) {
-                totalRequiredGoals++;
+
+            int progressPercentage = (totalGoals > 0) ? (completedGoals * 100) / totalGoals : 0;
+
+            progressBar.setProgress(progressPercentage);
+            textViewProgress.setText(progressPercentage + "% Complete");
+            
+            // Check for achievements
+            checkAchievements(completedGoals, totalGoals);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    
+    private void checkAchievements(int completedGoals, int totalGoals) {
+        // Get today's date at midnight
+        Calendar calendar = Calendar.getInstance();
+        calendar.set(Calendar.HOUR_OF_DAY, 0);
+        calendar.set(Calendar.MINUTE, 0);
+        calendar.set(Calendar.SECOND, 0);
+        calendar.set(Calendar.MILLISECOND, 0);
+        long todayStart = calendar.getTimeInMillis();
+        
+        // Get today's progress
+        DailyGoalProgress todayProgress = dailyGoalProgressDao.getProgressForDate(todayStart);
+        
+        if (todayProgress != null) {
+            int previousCompletedGoals = todayProgress.getCompletedGoals();
+            
+            // Check if we just unlocked an achievement
+            if (completedGoals >= 3 && previousCompletedGoals < 3) {
+                showAchievementAnimation("You received a medal for completing " + completedGoals + " goals!");
+            } else if (completedGoals == totalGoals && previousCompletedGoals < totalGoals) {
+                showAchievementAnimation("You received a trophy for completing all " + totalGoals + " goals!");
             }
         }
-
-        int progressPercentage = (totalGoals > 0) ? (completedGoals * 100) / totalGoals : 0;
-
-        progressBar.setProgress(progressPercentage);
-        textViewProgress.setText(progressPercentage + "% Complete");
+    }
+    
+    private void showAchievementAnimation(String message) {
+        try {
+            // Create and show toast
+            Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
+            
+            // Create confetti animation
+            LottieAnimationView confettiAnimation = new LottieAnimationView(requireContext());
+            confettiAnimation.setAnimation(R.raw.confetti);
+            confettiAnimation.setRepeatCount(0); // Play only once
+            
+            // Add animation to the root view
+            ViewGroup rootView = (ViewGroup) requireView();
+            
+            // Create a FrameLayout to hold the animation
+            FrameLayout animationContainer = new FrameLayout(requireContext());
+            FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+            );
+            animationContainer.setLayoutParams(containerParams);
+            
+            // Set up the animation view
+            FrameLayout.LayoutParams animationParams = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+            );
+            confettiAnimation.setLayoutParams(animationParams);
+            
+            // Add the animation to the container
+            animationContainer.addView(confettiAnimation);
+            
+            // Add the container to the root view
+            rootView.addView(animationContainer);
+            
+            // Make sure the animation is visible
+            confettiAnimation.setVisibility(View.VISIBLE);
+            animationContainer.setVisibility(View.VISIBLE);
+            
+            // Play animation and remove it when done
+            confettiAnimation.playAnimation();
+            confettiAnimation.addAnimatorListener(new Animator.AnimatorListener() {
+                @Override
+                public void onAnimationStart(Animator animation) {}
+                
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    if (rootView != null && animationContainer != null) {
+                        rootView.removeView(animationContainer);
+                    }
+                }
+                
+                @Override
+                public void onAnimationCancel(Animator animation) {
+                    if (rootView != null && animationContainer != null) {
+                        rootView.removeView(animationContainer);
+                    }
+                }
+                
+                @Override
+                public void onAnimationRepeat(Animator animation) {}
+            });
+        } catch (Exception e) {
+            // Log the error but don't crash
+            e.printStackTrace();
+        }
     }
 
     private void updateDateDisplay() {

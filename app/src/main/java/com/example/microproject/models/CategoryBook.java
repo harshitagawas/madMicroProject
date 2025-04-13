@@ -14,7 +14,7 @@ public class CategoryBook {
     private int id;
     
     private String name;
-    private String imageUriString;
+    private String imageUriString; // Now stores the file path to the image
     private int categoryId; // Foreign key to associate with a category
     
     @Ignore
@@ -44,13 +44,17 @@ public class CategoryBook {
     // Setters
     public void setId(int id) { this.id = id; }
     public void setName(String name) { this.name = name; }
-    public void setImageUriString(String imageUriString) { this.imageUriString = imageUriString; }
+    public void setImageUriString(String imageUriString) { 
+        this.imageUriString = imageUriString;
+        Log.d(TAG, "Set image path: " + imageUriString);
+    }
     public void setCategoryId(int categoryId) { this.categoryId = categoryId; }
     
-    // Helper methods for Uri conversion
+    // Helper methods for Uri conversion - kept for backward compatibility
     public Uri getImageUri() {
         try {
             if (imageUri == null && imageUriString != null && !imageUriString.isEmpty()) {
+                Log.d(TAG, "Converting string to URI: " + imageUriString);
                 imageUri = Uri.parse(imageUriString);
             }
         } catch (Exception e) {
@@ -61,6 +65,11 @@ public class CategoryBook {
     
     public void setImageUri(Uri imageUri) {
         this.imageUri = imageUri;
-        this.imageUriString = imageUri != null ? imageUri.toString() : null;
+        if (imageUri != null) {
+            this.imageUriString = imageUri.toString();
+            Log.d(TAG, "Set image URI string: " + this.imageUriString);
+        } else {
+            this.imageUriString = null;
+        }
     }
 }

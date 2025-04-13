@@ -2,6 +2,7 @@ package com.example.microproject.adapters;
 
 import android.content.Context;
 import android.net.Uri;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -17,6 +18,7 @@ import com.example.microproject.models.CategoryBook;
 import java.util.List;
 
 public class CategoryBooksAdapter extends RecyclerView.Adapter<CategoryBooksAdapter.CategoryBooksViewHolder> {
+    private static final String TAG = "CategoryBooksAdapter";
     private final List<CategoryBook> categoryBooks;
     private final Context context;
 
@@ -38,16 +40,27 @@ public class CategoryBooksAdapter extends RecyclerView.Adapter<CategoryBooksAdap
         holder.bookTitle.setText(book.getName());
 
         try {
+            // First try to get the Uri directly
             Uri imageUri = book.getImageUri();
+            
+            // If that's null, try to parse the string
+            if (imageUri == null && book.getImageUriString() != null && !book.getImageUriString().isEmpty()) {
+                imageUri = Uri.parse(book.getImageUriString());
+                // Update the book's Uri for future use
+                book.setImageUri(imageUri);
+            }
+            
             if (imageUri != null) {
+                Log.d(TAG, "Loading image from URI: " + imageUri.toString());
                 holder.bookImage.setImageURI(imageUri);
                 holder.bookImage.setVisibility(View.VISIBLE);
             } else {
+                Log.d(TAG, "No image URI available for book: " + book.getName());
                 // Set a default image or hide the ImageView
                 holder.bookImage.setVisibility(View.GONE);
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.e(TAG, "Error loading image for book: " + book.getName(), e);
             // Handle image loading error
             holder.bookImage.setVisibility(View.GONE);
         }

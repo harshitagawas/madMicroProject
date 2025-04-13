@@ -1,12 +1,15 @@
 package com.example.microproject.models;
 
 import android.net.Uri;
+import android.util.Log;
 import androidx.room.Entity;
 import androidx.room.PrimaryKey;
 import androidx.room.Ignore;
 
 @Entity(tableName = "category_books")
 public class CategoryBook {
+    private static final String TAG = "CategoryBook";
+    
     @PrimaryKey(autoGenerate = true)
     private int id;
     
@@ -46,8 +49,12 @@ public class CategoryBook {
     
     // Helper methods for Uri conversion
     public Uri getImageUri() {
-        if (imageUri == null && imageUriString != null) {
-            imageUri = Uri.parse(imageUriString);
+        try {
+            if (imageUri == null && imageUriString != null && !imageUriString.isEmpty()) {
+                imageUri = Uri.parse(imageUriString);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error parsing URI: " + imageUriString, e);
         }
         return imageUri;
     }

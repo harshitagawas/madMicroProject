@@ -31,4 +31,7 @@ public interface CategoryBookDao {
     
     @Query("DELETE FROM category_books WHERE categoryId = :categoryId")
     void deleteAllBooksForCategory(int categoryId);
+    
+    @Query("SELECT * FROM category_books WHERE id = :bookId")
+    CategoryBook getCategoryBookById(int bookId);
 } 

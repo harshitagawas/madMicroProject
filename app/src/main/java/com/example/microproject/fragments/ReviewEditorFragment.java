@@ -30,12 +30,15 @@ import com.example.microproject.models.ImageElement;
 import com.example.microproject.models.Review;
 import com.example.microproject.models.ReviewElement;
 import com.example.microproject.models.TextElement;
+import com.example.microproject.database.AppDatabase;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class ReviewEditorFragment extends Fragment {
 
@@ -45,6 +48,8 @@ public class ReviewEditorFragment extends Fragment {
     private Review currentReview;
     private OnReviewSavedListener onReviewSavedListener;
     private RatingBar ratingBar;
+    private ExecutorService executorService;
+    private AppDatabase database;
 
     public interface OnReviewSavedListener {
         void onReviewSaved(Review review);
@@ -60,6 +65,13 @@ public class ReviewEditorFragment extends Fragment {
 
     public void setOnReviewSavedListener(OnReviewSavedListener listener) {
         this.onReviewSavedListener = listener;
+    }
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        database = AppDatabase.getInstance(requireContext());
+        executorService = Executors.newSingleThreadExecutor();
     }
 
     @Nullable
@@ -119,10 +131,27 @@ public class ReviewEditorFragment extends Fragment {
     }
 
     private void loadExistingReview(String reviewId) {
-        // TODO: Load review from database using reviewId
-        // For now, we'll just create a new review
-        currentReview = new Review();
-        currentReview.setId(reviewId);
+        executorService.execute(() -> {
+            Review review = database.reviewDao().getReviewById(reviewId);
+            if (review != null) {
+                requireActivity().runOnUiThread(() -> {
+                    currentReview = review;
+                    // Set the rating
+                    ratingBar.setRating(review.getRating());
+                    
+                    // Clear existing elements
+                    reviewCanvas.removeAllViews();
+                    elements.clear();
+                    
+                    // Add all elements from the review
+                    for (ReviewElement element : review.getElements()) {
+                        View elementView = element.createView(getContext());
+                        reviewCanvas.addView(elementView);
+                        elements.add(element);
+                    }
+                });
+            }
+        });
     }
 
     private void showAddTextDialog() {
@@ -225,16 +254,31 @@ public class ReviewEditorFragment extends Fragment {
                 // Save the review canvas as an image
                 saveCanvasAsImage();
 
-                // Notify the listener that a review has been saved
-                if (onReviewSavedListener != null) {
-                    onReviewSavedListener.onReviewSaved(currentReview);
-                }
+                // Save to database
+                executorService.execute(() -> {
+                    if (currentReview.getId() != null) {
+                        database.reviewDao().updateReview(currentReview);
+                    } else {
+                        database.reviewDao().insertReview(currentReview);
+                    }
 
-                // Show success message
-                Toast.makeText(getContext(), "Review saved successfully!", Toast.LENGTH_SHORT).show();
+                    // Notify the listener that a review has been saved
+                    if (onReviewSavedListener != null) {
+                        requireActivity().runOnUiThread(() -> {
+                            onReviewSavedListener.onReviewSaved(currentReview);
+                        });
+                    }
 
-                // Go back to the previous fragment
-                getParentFragmentManager().popBackStack();
+                    // Show success message
+                    requireActivity().runOnUiThread(() -> {
+                        Toast.makeText(getContext(), "Review saved successfully!", Toast.LENGTH_SHORT).show();
+                    });
+
+                    // Go back to the previous fragment
+                    requireActivity().runOnUiThread(() -> {
+                        getParentFragmentManager().popBackStack();
+                    });
+                });
             } else {
                 Toast.makeText(getContext(), "Please enter a title for your review", Toast.LENGTH_SHORT).show();
             }

@@ -6,6 +6,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -62,15 +63,43 @@ public class EditProfileFragment extends Fragment {
         Bundle bundle = getArguments();
         if (bundle != null && bundle.containsKey("user")) {
             user = bundle.getParcelable("user");
-            populateFields();
+            if (user != null) {
+                populateFields();
+            } else {
+                Toast.makeText(requireContext(), "Error: User data not available", Toast.LENGTH_SHORT).show();
+                navigateBack();
+                return;
+            }
+        } else {
+            // If no user data is provided, fetch the default user (ID 1) from the database
+            executorService.execute(() -> {
+                User defaultUser = userDao.getUserByIdSync(1);
+                if (defaultUser != null) {
+                    user = defaultUser;
+                    requireActivity().runOnUiThread(this::populateFields);
+                } else {
+                    // Create a default user if none exists
+                    User newUser = new User("User", "Add your bio here", 0, 0, 0);
+                    newUser.setId(1); // Set ID to 1 for the default user
+                    userDao.insert(newUser);
+                    user = newUser;
+                    requireActivity().runOnUiThread(this::populateFields);
+                }
+            });
         }
 
         // Set click listeners
         saveButton.setOnClickListener(v -> saveProfile());
         cancelButton.setOnClickListener(v -> navigateBack());
+        selectImageButton.setOnClickListener(v -> {
+            // Image selection functionality will be implemented later
+            Toast.makeText(requireContext(), "Image selection not implemented yet", Toast.LENGTH_SHORT).show();
+        });
     }
 
     private void populateFields() {
+        if (user == null) return;
+        
         usernameEditText.setText(user.getName());
         bioEditText.setText(user.getBio());
         totalBooksReadEditText.setText(String.valueOf(user.getTotalBooksRead()));
@@ -80,7 +109,9 @@ public class EditProfileFragment extends Fragment {
 
     private void saveProfile() {
         if (user == null) {
-            return; // Prevent crash if user is null
+            Toast.makeText(requireContext(), "Error: User data not available", Toast.LENGTH_SHORT).show();
+            navigateBack();
+            return;
         }
 
         // Get values from EditText fields safely
@@ -105,13 +136,18 @@ public class EditProfileFragment extends Fragment {
             );
         } catch (NumberFormatException e) {
             e.printStackTrace();
+            Toast.makeText(requireContext(), "Error: Invalid number format", Toast.LENGTH_SHORT).show();
+            return;
         }
 
         // Update user in Room database
-        executorService.execute(() -> userDao.update(user));
-
-        // Navigate back to ProfileFragment
-        navigateBack();
+        executorService.execute(() -> {
+            userDao.update(user);
+            requireActivity().runOnUiThread(() -> {
+                Toast.makeText(requireContext(), "Profile updated successfully", Toast.LENGTH_SHORT).show();
+                navigateBack();
+            });
+        });
     }
 
     private void navigateBack() {

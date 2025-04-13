@@ -2,18 +2,23 @@ package com.example.microproject.database;
 
 import androidx.room.TypeConverter;
 import com.example.microproject.models.ReviewElement;
+import com.example.microproject.utils.ReviewElementAdapter;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
 import java.util.List;
 
 public class Converters {
+    private static final Gson gson = new GsonBuilder()
+            .registerTypeAdapter(ReviewElement.class, new ReviewElementAdapter())
+            .create();
+            
     @TypeConverter
     public static String fromReviewElementList(List<ReviewElement> elements) {
         if (elements == null) {
             return null;
         }
-        Gson gson = new Gson();
         Type type = new TypeToken<List<ReviewElement>>() {}.getType();
         return gson.toJson(elements, type);
     }
@@ -23,7 +28,6 @@ public class Converters {
         if (elementsString == null) {
             return null;
         }
-        Gson gson = new Gson();
         Type type = new TypeToken<List<ReviewElement>>() {}.getType();
         return gson.fromJson(elementsString, type);
     }

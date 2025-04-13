@@ -19,4 +19,7 @@ public interface UserDao {
 
     @Query("SELECT * FROM users WHERE id = :id LIMIT 1")
     LiveData<User> getUserById(int id);
+    
+    @Query("SELECT * FROM users WHERE id = :id LIMIT 1")
+    User getUserByIdSync(int id);
 }

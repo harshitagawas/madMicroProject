@@ -111,15 +111,23 @@ public class CategoryBooksFragment extends Fragment {
         TextView categoryTitle = view.findViewById(R.id.category_title);
         if (categoryTitle != null) {
             executorService.execute(() -> {
-                Category category = database.categoryDao().getCategoryById(categoryId);
-                if (category != null) {
+                try {
+                    Category category = database.categoryDao().getCategoryById(categoryId);
+                    if (category != null) {
+                        requireActivity().runOnUiThread(() -> {
+                            categoryTitle.setText("Books in " + category.getName());
+                        });
+                    } else {
+                        requireActivity().runOnUiThread(() -> {
+                            categoryTitle.setText("Category Not Found");
+                            Toast.makeText(getContext(), "Category not found", Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
                     requireActivity().runOnUiThread(() -> {
-                        categoryTitle.setText("Books in " + category.getName());
-                    });
-                } else {
-                    requireActivity().runOnUiThread(() -> {
-                        categoryTitle.setText("Category Not Found");
-                        Toast.makeText(getContext(), "Category not found", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(getContext(), "Error loading category: " + e.getMessage(), 
+                                      Toast.LENGTH_SHORT).show();
                     });
                 }
             });
@@ -153,6 +161,12 @@ public class CategoryBooksFragment extends Fragment {
         Button selectImageButton = dialogView.findViewById(R.id.select_image_button);
         imagePreview = dialogView.findViewById(R.id.image_preview);
         
+        // Reset selected image
+        selectedImageUri = null;
+        if (imagePreview != null) {
+            imagePreview.setVisibility(View.GONE);
+        }
+        
         builder.setView(dialogView)
                .setTitle("Add New Book")
                .setPositiveButton("Add", (dialog, which) -> {
@@ -160,11 +174,13 @@ public class CategoryBooksFragment extends Fragment {
                    if (!bookName.isEmpty()) {
                        CategoryBook book;
                        if (selectedImageUri != null) {
+                           // Create book with image
                            book = new CategoryBook(bookName, selectedImageUri);
+                           book.setCategoryId(categoryId);
                        } else {
+                           // Create book without image
                            book = new CategoryBook(bookName, (String) null, categoryId);
                        }
-                       book.setCategoryId(categoryId);
                        saveCategoryBook(book);
                    } else {
                        Toast.makeText(getContext(), "Please enter a book name", 
@@ -183,8 +199,13 @@ public class CategoryBooksFragment extends Fragment {
     private void saveCategoryBook(CategoryBook categoryBook) {
         executorService.execute(() -> {
             try {
+                // Make sure categoryId is set
+                categoryBook.setCategoryId(categoryId);
+                
+                // Insert the book and get its ID
                 long id = database.categoryBookDao().insertCategoryBook(categoryBook);
                 categoryBook.setId((int) id);
+                
                 requireActivity().runOnUiThread(() -> {
                     loadCategoryBooks();
                     Toast.makeText(getContext(), "Book added successfully", 
@@ -201,8 +222,14 @@ public class CategoryBooksFragment extends Fragment {
     }
     
     private void pickImage() {
-        Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
-        imagePickerLauncher.launch(intent);
+        try {
+            Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+            imagePickerLauncher.launch(intent);
+        } catch (Exception e) {
+            e.printStackTrace();
+            Toast.makeText(getContext(), "Error selecting image: " + e.getMessage(), 
+                          Toast.LENGTH_SHORT).show();
+        }
     }
 
     @Override
